@@ -252,6 +252,43 @@ def run_pipeline(
         timeout=300,
     ):
         return False, logs, stages
+
+    try:
+        prediction_result = json.loads(
+            (model_dir / "prediction.json").read_text(encoding="utf-8")
+        )
+        is_malicious = prediction_result.get("class_id") == 1
+    except (OSError, json.JSONDecodeError):
+        is_malicious = False
+
+    if is_malicious:
+        if not stage(
+            "取证分析",
+            [
+                PYTHON,
+                str(PROJECT_ROOT / "src/analyse/forensic_graphml.py"),
+                str(cleaned_dir),
+                "-o",
+                str(package_dir / "analyse"),
+                "--family-mode",
+                "stem",
+            ],
+            PROJECT_ROOT,
+            timeout=300,
+        ):
+            return False, logs, stages
+    else:
+        logs["取证分析"] = "模型预测为良性，未执行取证分析（仅对恶意结果进行取证）。"
+        (logs_dir / f"{len(stages) + 1:02d}_取证分析.log").write_text(
+            logs["取证分析"], encoding="utf-8"
+        )
+        stages.append({"name": "取证分析", "status": "未运行（预测为良性）"})
+        analyse_dir = package_dir / "analyse"
+        analyse_dir.mkdir(parents=True, exist_ok=True)
+        (analyse_dir / "README.md").write_text(
+            "# 取证分析\n\n模型预测为良性，未执行取证分析。\n",
+            encoding="utf-8",
+        )
     return True, logs, stages
 
 

@@ -162,7 +162,10 @@ def read_graphml(path):
     return nodes, edges, outgoing, incoming, root_url
 
 
-def family_from_path(path):
+def family_from_path(path, mode="parent"):
+    """family 来源：parent=父目录名（数据集场景），stem=GraphML 文件名（检测流水线场景）。"""
+    if mode == "stem":
+        return path.stem
     if path.parent.name:
         return path.parent.name
     return path.stem.split("_")[0]
@@ -956,8 +959,8 @@ def export_report(path, graphml_path, family, nodes, edges, root_url, evidence, 
         f.write("\n")
 
 
-def process_graphml(path, output_dir):
-    family = family_from_path(path)
+def process_graphml(path, output_dir, family_mode="parent"):
+    family = family_from_path(path, family_mode)
     nodes, edges, outgoing, incoming, root_url = read_graphml(path)
     evidence = apply_rules(family, nodes, edges, outgoing, incoming, root_url)
     chain = extract_attack_chain(nodes, edges, outgoing, root_url, evidence)
@@ -970,11 +973,12 @@ def process_graphml(path, output_dir):
     return family, evidence, chain
 
 
-def export_index(output_dir, results):
+def export_index(output_dir, results, family_mode="parent"):
     index = output_dir / "README.md"
+    name_column = "图文件" if family_mode == "stem" else "家族"
     with index.open("w", encoding="utf-8") as f:
         f.write("# GraphML 规则取证结果\n\n")
-        f.write("| 家族 | 证据数 | 主模式 | 报告 |\n")
+        f.write(f"| {name_column} | 证据数 | 主模式 | 报告 |\n")
         f.write("|---|---:|---|---|\n")
         for family, evidence, _chain in results:
             patterns = "；".join(classify_pattern(evidence)[:3])
@@ -985,6 +989,12 @@ def main():
     parser = argparse.ArgumentParser(description="Rule-based forensic extractor for PageGraph GraphML files.")
     parser.add_argument("inputs", nargs="*", help="GraphML files or directories. Defaults to current directory.")
     parser.add_argument("-o", "--output", default="forensic_output", help="Output directory.")
+    parser.add_argument(
+        "--family-mode",
+        choices=("parent", "stem"),
+        default="parent",
+        help="结果归类方式：parent=按父目录名（数据集场景），stem=按 GraphML 文件名（检测流水线场景，避免多图互相覆盖）。",
+    )
     args = parser.parse_args()
 
     roots = [Path(p) for p in args.inputs] if args.inputs else [Path(".")]
@@ -1000,8 +1010,8 @@ def main():
 
     results = []
     for graphml in sorted(set(graphml_files)):
-        results.append(process_graphml(graphml, output_dir))
-    export_index(output_dir, results)
+        results.append(process_graphml(graphml, output_dir, args.family_mode))
+    export_index(output_dir, results, args.family_mode)
     print(f"Processed {len(results)} graphml files. Output: {output_dir}")
 
 
