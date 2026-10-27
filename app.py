@@ -21,6 +21,7 @@ BRAVE_BINARY = Path(
 CRAWL_SECONDS = 5
 PYTHON = sys.executable
 MODEL_DIR = PROJECT_ROOT / "src" / "model"
+PATHCOVER_TOP_K = 3  # 路径遮盖分析提取的核心路径数量（可变参数）
 
 
 def load_history() -> list[dict[str, object]]:
@@ -219,6 +220,33 @@ def run_pipeline(
             str(model_path),
             "--output",
             str(model_dir / "prediction.json"),
+        ],
+        PROJECT_ROOT,
+        timeout=300,
+    ):
+        return False, logs, stages
+
+    if not stage(
+        "路径遮盖分析",
+        [
+            PYTHON,
+            str(PROJECT_ROOT / "src/pathcover/run.py"),
+            "--jsonl",
+            str(jsonl_path),
+            "--paths-dir",
+            str(paths_dir),
+            "--prediction",
+            str(model_dir / "prediction.json"),
+            "--vocabs",
+            str(vocab_path),
+            "--num-stats",
+            str(stats_path),
+            "--checkpoint",
+            str(model_path),
+            "--output-dir",
+            str(package_dir / "pathcover"),
+            "--topk",
+            str(PATHCOVER_TOP_K),
         ],
         PROJECT_ROOT,
         timeout=300,
