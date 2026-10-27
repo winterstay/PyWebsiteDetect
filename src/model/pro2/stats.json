@@ -1,0 +1,9 @@
+{
+  "num_webpages": 1478,
+  "num_benign": 540,
+  "num_malicious": 938,
+  "avg_sequences_per_webpage": 10.276048714479026,
+  "max_sequences_per_webpage": 709,
+  "avg_nodes_per_sequence": 345.3172899657624,
+  "max_nodes_per_sequence": 82648
+}

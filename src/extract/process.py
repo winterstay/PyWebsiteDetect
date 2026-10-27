@@ -4,6 +4,7 @@ import json
 import math
 import random
 import argparse
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -458,14 +459,47 @@ def build_stats(webpages: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root_dir", type=str, required=True, help="root dir containing benign/ and malicious/")
-    parser.add_argument("--out_dir", type=str, required=True, help="output dir")
+    parser.add_argument("--root_dir", type=str, help="root dir containing benign/ and malicious/")
+    parser.add_argument("--out_dir", type=str, help="output dir")
+    parser.add_argument("--single-json-dir", type=str, help="path JSON directory for one-page inference")
+    parser.add_argument("--url", type=str, help="URL associated with the one-page inference sample")
+    parser.add_argument("--out-jsonl", type=str, help="output JSONL for one-page inference")
     parser.add_argument("--train_ratio", type=float, default=0.7)
     parser.add_argument("--valid_ratio", type=float, default=0.1)
     parser.add_argument("--test_ratio", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--debug", action="store_true", help="print debug info")
     args = parser.parse_args()
+
+    if args.single_json_dir:
+        if not args.url or not args.out_jsonl:
+            parser.error("--single-json-dir requires --url and --out-jsonl")
+        json_dir = Path(args.single_json_dir)
+        output_path = Path(args.out_jsonl)
+        files = collect_json_files(json_dir)
+        if not files:
+            raise SystemExit(f"No extracted path JSON files found in {json_dir}")
+        all_sequences = []
+        for file_path in files:
+            raw_sequences = extract_sequences_from_file(safe_read_json(file_path))
+            all_sequences.extend(raw_sequences)
+        if not all_sequences:
+            raise SystemExit("No sink paths were extracted; cannot create a model sample")
+        parsed = urlparse(args.url)
+        webpage_id = parsed.netloc or parsed.path or "webpage"
+        webpage = normalize_webpage(
+            raw_sequences=all_sequences,
+            label=0,
+            webpage_id=webpage_id,
+            source_file=", ".join(str(path.name) for path in files),
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        write_jsonl([webpage], output_path)
+        print(f"[DONE] extracted {len(all_sequences)} paths into {output_path}")
+        return
+
+    if not args.root_dir or not args.out_dir:
+        parser.error("--root_dir and --out_dir are required for dataset preprocessing")
 
     root_dir = Path(args.root_dir)
     out_dir = Path(args.out_dir)
